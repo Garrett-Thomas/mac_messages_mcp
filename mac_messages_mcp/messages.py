@@ -608,7 +608,7 @@ def get_recent_messages(hours: int = 24, contact: Optional[str] = None) -> str:
     Returns:
         Formatted string with recent messages
     """
-    handle_id = None
+    handle_ids = None
     
     # If contact is specified, try to resolve it
     if contact:
@@ -659,12 +659,12 @@ def get_recent_messages(hours: int = 24, contact: Optional[str] = None) -> str:
             query = "SELECT ROWID FROM handle WHERE id = ?"
             results = query_messages_db(query, (contact,))
             if results and not "error" in results[0] and len(results) > 0:
-                handle_id = [row["ROWID"] for row in results]
+                handle_ids = [row["ROWID"] for row in results]
         else:
             # This is a phone number - try various formats
-            handle_id = find_handle_by_phone(contact)
+            handle_ids = find_handle_by_phone(contact)
             
-        if not handle_id:
+        if not handle_ids:
             # Try a direct search in message table to see if any messages exist
             normalized = normalize_phone_number(contact)
             query = """
@@ -713,9 +713,12 @@ def get_recent_messages(hours: int = 24, contact: Optional[str] = None) -> str:
     params = (timestamp_str,)
     
     # Add contact filter if handle_id was found
-    if handle_id:
-        query += "AND m.handle_id = ? "
-        params = (timestamp_str, handle_id)
+    if handle_ids:
+        placeholders = ', '.join(['?' for _ in handle_ids])
+        query += f"AND m.handle_id IN ({placeholders}) "
+        params = handle_ids
+        params.insert(0, timestamp_str)
+        params = tuple(params)
     
     query += "ORDER BY m.date DESC LIMIT 100"
     
